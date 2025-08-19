@@ -137,25 +137,51 @@ def show_employees():
                 - **data_admissao** - Data no formato AAAA-MM-DD
                 """)
                 
-                st.write("**Estrutura do arquivo CSV:**")
+                st.write("**Como deve ficar no Excel/Google Sheets:**")
                 
-                # Criar um DataFrame de exemplo para mostrar a estrutura
-                example_data = {
-                    'nome': ['João Silva', 'Maria Santos', 'Pedro Costa'],
-                    'cargo': ['Analista', 'Gerente', 'Assistente'],
-                    'salario': [5000, 8000, 3500],
-                    'departamento': ['Tecnologia', 'Vendas', 'Financeiro'],
-                    'data_admissao': ['2024-01-15', '2024-02-01', '2024-03-10']
-                }
-                example_df = pd.DataFrame(example_data)
-                st.dataframe(example_df, use_container_width=True)
+                # Criar um exemplo visual da estrutura
+                col_a, col_b, col_c, col_d, col_e = st.columns(5)
                 
-                st.write("**Como criar o arquivo:**")
+                with col_a:
+                    st.write("**Coluna A**")
+                    st.code("nome")
+                    st.write("João Silva")
+                    st.write("Maria Santos")
+                
+                with col_b:
+                    st.write("**Coluna B**")
+                    st.code("cargo")
+                    st.write("Analista")
+                    st.write("Gerente")
+                
+                with col_c:
+                    st.write("**Coluna C**")
+                    st.code("salario")
+                    st.write("5000")
+                    st.write("8000")
+                
+                with col_d:
+                    st.write("**Coluna D**")
+                    st.code("departamento")
+                    st.write("Tecnologia")
+                    st.write("Vendas")
+                
+                with col_e:
+                    st.write("**Coluna E**")
+                    st.code("data_admissao")
+                    st.write("2024-01-15")
+                    st.write("2024-02-01")
+                
+                st.info("💡 **Importante:** Cada informação deve estar em uma coluna separada (A, B, C, D, E)")
+                
+                st.write("**Passos para criar o arquivo:**")
                 st.markdown("""
-                1. Abra Excel ou Google Sheets
-                2. Coloque cada informação em uma coluna (como na tabela acima)
-                3. Salve como arquivo CSV
-                4. Faça upload aqui
+                1. **Coluna A**: Nome completo
+                2. **Coluna B**: Cargo/função  
+                3. **Coluna C**: Salário (só números)
+                4. **Coluna D**: Departamento
+                5. **Coluna E**: Data admissão (AAAA-MM-DD)
+                6. Salvar como CSV
                 """)
             
             with col2:
@@ -170,7 +196,14 @@ def show_employees():
                     use_container_width=True
                 )
                 
-                st.write("**Dica:** Abra o template no Excel ou Google Sheets para facilitar a edição")
+                st.write("**Instruções:**")
+                st.markdown("""
+                1. Baixe o template
+                2. Abra no Excel/Google Sheets
+                3. Cada coluna representa um campo
+                4. Adicione seus funcionários nas linhas
+                5. Salve como CSV
+                """)
             
             uploaded_file = st.file_uploader("Selecionar arquivo CSV", type=['csv'])
             if uploaded_file is not None:
