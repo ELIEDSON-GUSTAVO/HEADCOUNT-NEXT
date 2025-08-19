@@ -164,35 +164,79 @@ def show_dashboard():
     dept_costs.columns = ['Custo Total', 'Salário Médio', 'Funcionários']
     dept_costs = dept_costs.sort_values('Custo Total', ascending=False)
     
-    # Criar tabela de custos com visual moderno
-    col1, col2 = st.columns([2, 1])
+    # Gráfico principal de custo por setor
+    fig_cost = px.bar(
+        x=dept_costs.index,
+        y=dept_costs['Custo Total'],
+        title="💸 Custo Total por Setor",
+        labels={'x': 'Departamento', 'y': 'Custo Total (R$)'},
+        color=dept_costs['Custo Total'],
+        color_continuous_scale=['#FF6B6B', '#FF0000', '#8B0000']
+    )
+    fig_cost.update_xaxes(tickangle=45)
+    fig_cost.update_layout(height=400)
+    st.plotly_chart(fig_cost, use_container_width=True)
     
-    with col1:
-        # Gráfico de barras para custo total por setor
-        fig_cost = px.bar(
-            x=dept_costs.index,
-            y=dept_costs['Custo Total'],
-            title="💸 Custo Total por Setor",
-            labels={'x': 'Departamento', 'y': 'Custo Total (R$)'},
-            color=dept_costs['Custo Total'],
-            color_continuous_scale=['#FF6B6B', '#FF0000', '#8B0000']
-        )
-        fig_cost.update_xaxes(tickangle=45)
-        st.plotly_chart(fig_cost, use_container_width=True)
+    # Cartões de custo organizados em grid
+    st.write("**💰 Resumo Detalhado por Setor:**")
     
-    with col2:
-        # Tabela resumo de custos
-        st.write("**Resumo de Custos por Setor:**")
-        for dept in dept_costs.index:
+    # Organizar em múltiplas colunas baseado no número de departamentos
+    num_depts = len(dept_costs)
+    if num_depts <= 3:
+        cols = st.columns(num_depts)
+    elif num_depts <= 6:
+        cols = st.columns(3)
+    else:
+        cols = st.columns(4)
+    
+    for i, dept in enumerate(dept_costs.index):
+        col_index = i % len(cols)
+        
+        with cols[col_index]:
             custo = dept_costs.loc[dept, 'Custo Total']
             funcionarios = int(dept_costs.loc[dept, 'Funcionários'])
             percentual = (custo / salario_total) * 100
+            media_salarial = dept_costs.loc[dept, 'Salário Médio']
+            
+            # Cores baseadas no percentual de custo
+            if percentual >= 20:
+                border_color = "#FF0000"
+                bg_color = "#330000"
+            elif percentual >= 10:
+                border_color = "#FF6B6B"
+                bg_color = "#2A0000"
+            else:
+                border_color = "#FF9999"
+                bg_color = "#220000"
             
             st.markdown(f"""
-            <div style="border: 1px solid #FF0000; padding: 10px; margin: 5px 0; border-radius: 5px;">
-                <strong>{dept}</strong><br>
-                💰 R$ {custo:,.2f} ({percentual:.1f}%)<br>
-                👥 {funcionarios} funcionários
+            <div style="
+                border: 2px solid {border_color}; 
+                padding: 12px; 
+                margin: 5px 0; 
+                border-radius: 8px;
+                background: linear-gradient(135deg, {bg_color} 0%, #1E1E1E 100%);
+                box-shadow: 0 2px 6px rgba(255, 0, 0, 0.3);
+                height: 140px;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                text-align: center;
+            ">
+                <div style="font-size: 14px; font-weight: bold; color: #FF0000; margin-bottom: 5px; 
+                           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    {dept}
+                </div>
+                <div style="color: #FFFFFF; line-height: 1.3;">
+                    <div style="font-size: 16px; font-weight: bold; margin-bottom: 3px;">
+                        💰 R$ {custo/1000:.0f}K
+                    </div>
+                    <div style="font-size: 12px; color: #CCCCCC;">
+                        📊 {percentual:.1f}%<br>
+                        👥 {funcionarios} func.<br>
+                        💵 R$ {media_salarial/1000:.1f}K
+                    </div>
+                </div>
             </div>
             """, unsafe_allow_html=True)
     
@@ -834,8 +878,12 @@ def show_reports():
                 }, index=['Outros'])
                 dept_display = pd.concat([dept_display, new_row])
             
+            # Reset index para criar coluna 'departamento'
+            dept_scatter = dept_display.reset_index()
+            dept_scatter = dept_scatter.rename(columns={'index': 'departamento'})
+            
             fig_scatter = px.scatter(
-                dept_display.reset_index(),
+                dept_scatter,
                 x='Funcionários',
                 y='Custo Total',
                 title="💰 Custo Total vs Número de Funcionários",
@@ -851,8 +899,11 @@ def show_reports():
         
         with col2:
             # Participação no custo total (pizza)
+            dept_pie = dept_display.reset_index()
+            dept_pie = dept_pie.rename(columns={'index': 'departamento'})
+            
             fig_pie_cost = px.pie(
-                dept_display.reset_index(),
+                dept_pie,
                 values='Custo Total',
                 names='departamento',
                 title="📊 Participação no Custo Total",
@@ -868,8 +919,12 @@ def show_reports():
         dept_analysis['Custo por Funcionário'] = dept_analysis['Custo Total'] / dept_analysis['Funcionários']
         dept_efficiency = dept_analysis.sort_values('Custo por Funcionário', ascending=False).head(10)
         
+        # Preparar dados para o gráfico de eficiência
+        dept_eff = dept_efficiency.reset_index()
+        dept_eff = dept_eff.rename(columns={'index': 'departamento'})
+        
         fig_efficiency = px.bar(
-            dept_efficiency.reset_index(),
+            dept_eff,
             x='departamento',
             y='Custo por Funcionário',
             title="💸 Custo Médio por Funcionário (Top 10)",
