@@ -7,6 +7,72 @@ import os
 from utils.data_handler import DataHandler
 from utils.visualizations import create_visualizations
 
+# Configuração de tema customizado
+st.markdown("""
+<style>
+    /* Sidebar styling */
+    .css-1d391kg {
+        background-color: #1E1E1E;
+    }
+    
+    /* Main content area */
+    .stApp {
+        background-color: #1E1E1E;
+    }
+    
+    /* Metrics styling */
+    .metric-container {
+        background: linear-gradient(135deg, #2D2D2D 0%, #1E1E1E 100%);
+        padding: 1rem;
+        border-radius: 10px;
+        border: 1px solid #FF0000;
+        text-align: center;
+        margin: 0.5rem 0;
+    }
+    
+    /* Button styling */
+    .stButton > button {
+        background: linear-gradient(135deg, #FF0000 0%, #CC0000 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-weight: bold;
+        transition: all 0.3s ease;
+    }
+    
+    .stButton > button:hover {
+        background: linear-gradient(135deg, #CC0000 0%, #990000 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(255, 0, 0, 0.3);
+    }
+    
+    /* Success message styling */
+    .stSuccess {
+        background-color: #2D2D2D;
+        border: 1px solid #FF0000;
+        color: #FFFFFF;
+    }
+    
+    /* Headers styling */
+    h1, h2, h3 {
+        color: #FF0000 !important;
+        font-weight: bold;
+    }
+    
+    /* Expander styling */
+    .streamlit-expanderHeader {
+        background-color: #2D2D2D;
+        border: 1px solid #FF0000;
+        color: #FFFFFF;
+    }
+    
+    /* Table styling */
+    .stDataFrame {
+        background-color: #2D2D2D;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # Configuração da página
 st.set_page_config(
     page_title="Sistema de Gestão de Funcionários",
@@ -172,14 +238,42 @@ MARIA SANTOS;GERENTE; R$ 8.500,50 ;VENDAS;01/02/2024""")
             if uploaded_file is not None:
                 # Prévia dos dados
                 try:
+                    # Reset file pointer
+                    uploaded_file.seek(0)
+                    
                     # Tentar diferentes separadores e encodings
-                    try:
-                        preview_df = pd.read_csv(uploaded_file, sep=';', encoding='utf-8')
-                    except:
+                    preview_df = None
+                    error_messages = []
+                    
+                    # Lista de configurações para tentar
+                    configs = [
+                        {'sep': ';', 'encoding': 'utf-8'},
+                        {'sep': ';', 'encoding': 'latin-1'},
+                        {'sep': ';', 'encoding': 'cp1252'},
+                        {'sep': ';', 'encoding': 'iso-8859-1'},
+                        {'sep': ',', 'encoding': 'utf-8'},
+                        {'sep': ',', 'encoding': 'latin-1'},
+                    ]
+                    
+                    for config in configs:
                         try:
-                            preview_df = pd.read_csv(uploaded_file, sep=';', encoding='latin-1')
-                        except:
-                            preview_df = pd.read_csv(uploaded_file, sep=',', encoding='utf-8')
+                            uploaded_file.seek(0)
+                            preview_df = pd.read_csv(uploaded_file, sep=config['sep'], encoding=config['encoding'])
+                            if len(preview_df.columns) > 0 and len(preview_df) > 0:
+                                break
+                            else:
+                                error_messages.append(f"Config {config}: arquivo vazio ou sem colunas")
+                        except Exception as e:
+                            error_messages.append(f"Config {config}: {str(e)}")
+                            continue
+                    
+                    if preview_df is None or len(preview_df.columns) == 0:
+                        st.error("❌ Erro ao ler arquivo CSV: Não foi possível detectar o formato")
+                        st.write("**Tentativas realizadas:**")
+                        for msg in error_messages:
+                            st.write(f"- {msg}")
+                        st.info("💡 Certifique-se de que o arquivo tem dados e está no formato CSV correto")
+                        return
                     
                     # Limpar nomes das colunas (remover espaços)
                     preview_df.columns = preview_df.columns.str.strip()
@@ -370,7 +464,7 @@ MARIA SANTOS;GERENTE; R$ 8.500,50 ;VENDAS;01/02/2024""")
             filtered_df = filtered_df[filtered_df['status'] == status_filter]
         
         if search_term:
-            filtered_df = filtered_df[filtered_df['nome'].astype(str).str.contains(search_term, case=False, na=False)]
+            filtered_df = filtered_df[filtered_df['nome'].str.contains(search_term, case=False, na=False)]
         
         # Opções de visualização
         col1, col2, col3 = st.columns([2, 1, 1])
@@ -383,7 +477,8 @@ MARIA SANTOS;GERENTE; R$ 8.500,50 ;VENDAS;01/02/2024""")
         
         # Aplicar ordenação
         ascending = True if sort_order == "Crescente" else False
-        filtered_df = filtered_df.sort_values(by=sort_by, ascending=ascending)
+        if not filtered_df.empty:
+            filtered_df = filtered_df.sort_values(by=sort_by, ascending=ascending)
         
         if view_mode == "📋 Tabela":
             # Exibir tabela com edição rápida
@@ -400,7 +495,8 @@ MARIA SANTOS;GERENTE; R$ 8.500,50 ;VENDAS;01/02/2024""")
                 if st.button("💾 Atualizar Status Selecionados") and selected_employees:
                     updated_count = 0
                     for emp_name in selected_employees:
-                        emp_email = filtered_df[filtered_df['nome'] == emp_name]['email'].iloc[0]
+                        emp_data_row = filtered_df[filtered_df['nome'] == emp_name].iloc[0]
+                        emp_email = emp_data_row['email']
                         emp_data = filtered_df[filtered_df['nome'] == emp_name].iloc[0].to_dict()
                         emp_data['status'] = new_status
                         
