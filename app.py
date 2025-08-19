@@ -124,65 +124,24 @@ def show_employees():
         
         # Botão para adicionar múltiplos funcionários
         with st.expander("📋 Adicionar Múltiplos Funcionários (CSV)"):
-            st.write("**Formato do CSV:** Cada informação deve estar em uma coluna separada")
+            st.write("**O sistema aceita automaticamente seus arquivos CSV do Excel**")
             
             col1, col2 = st.columns([2, 1])
             with col1:
-                st.write("**Colunas obrigatórias:**")
+                st.success("✅ **Seu formato já é aceito!** O sistema detecta automaticamente:")
                 st.markdown("""
-                - **nome** - Nome completo do funcionário
-                - **cargo** - Cargo/função
-                - **salario** - Valor do salário (apenas números)
-                - **departamento** - Setor da empresa
-                - **data_admissao** - Data no formato AAAA-MM-DD
+                - **Separador**: Ponto e vírgula (;) ou vírgula (,)
+                - **Salários**: Com ou sem R$, vírgulas para decimais
+                - **Datas**: DD/MM/AAAA ou AAAA-MM-DD
+                - **Colunas**: Com ou sem espaços nos nomes
                 """)
                 
-                st.write("**Como deve ficar no Excel/Google Sheets:**")
+                st.write("**Exemplo do seu formato:**")
+                st.code("""nome;cargo; salario ;departamento;data admissao
+JOÃO SILVA;ANALISTA; R$ 5.000,00 ;TECNOLOGIA;15/01/2024
+MARIA SANTOS;GERENTE; R$ 8.500,50 ;VENDAS;01/02/2024""")
                 
-                # Criar um exemplo visual da estrutura
-                col_a, col_b, col_c, col_d, col_e = st.columns(5)
-                
-                with col_a:
-                    st.write("**Coluna A**")
-                    st.code("nome")
-                    st.write("João Silva")
-                    st.write("Maria Santos")
-                
-                with col_b:
-                    st.write("**Coluna B**")
-                    st.code("cargo")
-                    st.write("Analista")
-                    st.write("Gerente")
-                
-                with col_c:
-                    st.write("**Coluna C**")
-                    st.code("salario")
-                    st.write("5000")
-                    st.write("8000")
-                
-                with col_d:
-                    st.write("**Coluna D**")
-                    st.code("departamento")
-                    st.write("Tecnologia")
-                    st.write("Vendas")
-                
-                with col_e:
-                    st.write("**Coluna E**")
-                    st.code("data_admissao")
-                    st.write("2024-01-15")
-                    st.write("2024-02-01")
-                
-                st.info("💡 **Importante:** Cada informação deve estar em uma coluna separada (A, B, C, D, E)")
-                
-                st.write("**Passos para criar o arquivo:**")
-                st.markdown("""
-                1. **Coluna A**: Nome completo
-                2. **Coluna B**: Cargo/função  
-                3. **Coluna C**: Salário (só números)
-                4. **Coluna D**: Departamento
-                5. **Coluna E**: Data admissão (AAAA-MM-DD)
-                6. Salvar como CSV
-                """)
+                st.info("💡 **Dica:** Salve direto do Excel como CSV e faça upload. O sistema converte automaticamente!")
             
             with col2:
                 st.write("**Baixar Template:**")
@@ -196,20 +155,46 @@ def show_employees():
                     use_container_width=True
                 )
                 
-                st.write("**Instruções:**")
+                st.write("**Como usar:**")
                 st.markdown("""
-                1. Baixe o template
-                2. Abra no Excel/Google Sheets
-                3. Cada coluna representa um campo
-                4. Adicione seus funcionários nas linhas
-                5. Salve como CSV
+                1. Baixe o template (formato Excel padrão)
+                2. Edite no Excel normalmente
+                3. Salve como CSV
+                4. Faça upload - conversão automática!
+                
+                **Formatos aceitos:**
+                - Salário: R$ 1.500,00 ou 1500
+                - Data: 15/01/2024 ou 2024-01-15
+                - Separador: ; ou ,
                 """)
             
             uploaded_file = st.file_uploader("Selecionar arquivo CSV", type=['csv'])
             if uploaded_file is not None:
                 # Prévia dos dados
                 try:
-                    preview_df = pd.read_csv(uploaded_file)
+                    # Tentar diferentes separadores e encodings
+                    try:
+                        preview_df = pd.read_csv(uploaded_file, sep=';', encoding='utf-8')
+                    except:
+                        try:
+                            preview_df = pd.read_csv(uploaded_file, sep=';', encoding='latin-1')
+                        except:
+                            preview_df = pd.read_csv(uploaded_file, sep=',', encoding='utf-8')
+                    
+                    # Limpar nomes das colunas (remover espaços)
+                    preview_df.columns = preview_df.columns.str.strip()
+                    
+                    # Mapear colunas com nomes alternativos
+                    column_mapping = {
+                        'data admissao': 'data_admissao',
+                        'data_admissao': 'data_admissao',
+                        'salario': 'salario',
+                        ' salario ': 'salario'
+                    }
+                    
+                    for old_name, new_name in column_mapping.items():
+                        if old_name in preview_df.columns:
+                            preview_df = preview_df.rename(columns={old_name: new_name})
                     
                     # Verificar se todas as colunas obrigatórias estão presentes
                     required_columns = ['nome', 'cargo', 'salario', 'departamento', 'data_admissao']
@@ -241,14 +226,33 @@ def show_employees():
                                     else:
                                         email = f"{nome_parts[0]}@empresa.com"
                                     
+                                    # Limpar valor do salário (remover R$, espaços e converter vírgula para ponto)
+                                    salario_str = str(row['salario']).strip()
+                                    salario_str = salario_str.replace('R$', '').replace(' ', '').replace('.', '').replace(',', '.')
+                                    try:
+                                        salario_value = float(salario_str)
+                                    except:
+                                        salario_value = 0.0
+                                    
+                                    # Converter data do formato DD/MM/AAAA para AAAA-MM-DD
+                                    data_str = str(row['data_admissao']).strip()
+                                    if '/' in data_str:
+                                        parts = data_str.split('/')
+                                        if len(parts) == 3:
+                                            data_formatted = f"{parts[2]}-{parts[1].zfill(2)}-{parts[0].zfill(2)}"
+                                        else:
+                                            data_formatted = data_str
+                                    else:
+                                        data_formatted = data_str
+                                    
                                     employee_data = {
-                                        'nome': str(row['nome']),
+                                        'nome': str(row['nome']).strip(),
                                         'email': email,
                                         'telefone': '',
-                                        'departamento': str(row['departamento']),
-                                        'cargo': str(row['cargo']),
-                                        'salario': float(row['salario']),
-                                        'data_admissao': str(row['data_admissao']),
+                                        'departamento': str(row['departamento']).strip(),
+                                        'cargo': str(row['cargo']).strip(),
+                                        'salario': salario_value,
+                                        'data_admissao': data_formatted,
                                         'status': 'Ativo',
                                         'observacoes': ''
                                     }

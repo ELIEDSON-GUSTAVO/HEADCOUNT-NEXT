@@ -1,7 +1,7 @@
-nome,cargo,salario,departamento,data_admissao
-Ana Silva,Analista de RH,4500,Recursos Humanos,2024-01-15
-Carlos Santos,Desenvolvedor,7000,Tecnologia,2024-02-01
-Maria Oliveira,Coordenadora,6500,Marketing,2024-03-10
-Pedro Rodrigues,Analista,5200,Financeiro,2024-04-05
-Juliana Costa,Supervisora,6800,Vendas,2024-05-20
-Roberto Lima,Assistente,3800,Operações,2024-06-15
+nome;cargo; salario ;departamento;data admissao
+Ana Silva;Analista de RH; R$ 4.500,00 ;Recursos Humanos;15/01/2024
+Carlos Santos;Desenvolvedor; R$ 7.000,00 ;Tecnologia;01/02/2024
+Maria Oliveira;Coordenadora; R$ 6.500,00 ;Marketing;10/03/2024
+Pedro Rodrigues;Analista; R$ 5.200,00 ;Financeiro;05/04/2024
+Juliana Costa;Supervisora; R$ 6.800,00 ;Vendas;20/05/2024
+Roberto Lima;Assistente; R$ 3.800,00 ;Operações;15/06/2024
