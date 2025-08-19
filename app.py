@@ -81,10 +81,13 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Inicializar o manipulador de dados
-@st.cache_resource
+# Inicializar o manipulador de dados - CORREÇÃO AQUI
+_data_handler = None
 def get_data_handler():
-    return DataHandler()
+    global _data_handler
+    if _data_handler is None:
+        _data_handler = DataHandler()
+    return _data_handler
 
 data_handler = get_data_handler()
 
@@ -92,65 +95,76 @@ data_handler = get_data_handler()
 st.title("👥 Sistema de Gestão de Funcionários")
 st.markdown("---")
 
+# Cache para dados - CORREÇÃO AQUI
+@st.cache_data(ttl=300, show_spinner=False)
+def load_cached_data():
+    return data_handler.load_data()
+
 # Sidebar para navegação
 st.sidebar.title("📋 Menu de Navegação")
 
 # Botão de atualização automática
 st.sidebar.markdown("---")
-if st.sidebar.button("🔄 Atualizar Dados", use_container_width=True):
-    st.cache_resource.clear()
-    st.rerun()
+if st.sidebar.button("🔄 Atualizar Dados", use_container_width=True, key="refresh_button"):
+    st.cache_data.clear()
+    st.experimental_rerun()
+
+# Carregar dados com cache - CORREÇÃO AQUI
+df = load_cached_data()
 
 # Informações em tempo real
-df = data_handler.load_data()
 if not df.empty:
-    st.sidebar.metric("Total de Funcionários", len(df))
-    st.sidebar.metric("Folha Salarial", f"R$ {df['salario'].sum():,.2f}")
-    st.sidebar.metric("Último Update", datetime.now().strftime("%H:%M:%S"))
+    st.sidebar.metric("Total de Funcionários", len(df), key="total_func_metric")
+    st.sidebar.metric("Folha Salarial", f"R$ {df['salario'].sum():,.2f}", key="folha_metric")
+    st.sidebar.metric("Último Update", datetime.now().strftime("%H:%M:%S"), key="update_metric")
 
 st.sidebar.markdown("---")
 page = st.sidebar.selectbox(
     "Selecione uma opção:",
-    ["🏠 Dashboard", "👤 Funcionários", "📊 Relatórios", "⚙️ Configurações"]
+    ["🏠 Dashboard", "👤 Funcionários", "📊 Relatórios", "⚙️ Configurações"],
+    key="nav_selectbox"
 )
 
 # Função para exibir dashboard
 def show_dashboard():
     st.header("📊 Dashboard - Visão Geral")
     
-    # Carregar dados
-    df = data_handler.load_data()
+    # Carregar dados com cache - CORREÇÃO AQUI
+    df = load_cached_data()
     
     if df.empty:
         st.warning("⚠️ Nenhum funcionário cadastrado. Vá para a seção 'Funcionários' para adicionar dados.")
         return
     
+    # Criar cópia para manipulação - CORREÇÃO AQUI
+    df_temp = df.copy()
+    df_temp['data_admissao'] = pd.to_datetime(df_temp['data_admissao'])
+    
     # Métricas principais
     col1, col2, col3, col4, col5 = st.columns(5)
     
-    total_funcionarios = len(df)
-    salario_total = float(df['salario'].sum())
-    salario_medio = float(df['salario'].mean())
-    departamentos = int(df['departamento'].nunique())
+    total_funcionarios = len(df_temp)
+    salario_total = float(df_temp['salario'].sum())
+    salario_medio = float(df_temp['salario'].mean())
+    departamentos = int(df_temp['departamento'].nunique())
     
     # Funcionários recentes (últimos 30 dias)
-    df['data_admissao'] = pd.to_datetime(df['data_admissao'])
-    recent_hires = df[df['data_admissao'] >= (datetime.now() - pd.Timedelta(days=30))]
+    recent_hires = df_temp[df_temp['data_admissao'] >= (datetime.now() - pd.Timedelta(days=30))]
     
     with col1:
-        st.metric("Total de Funcionários", total_funcionarios)
+        st.metric("Total de Funcionários", total_funcionarios, key="total_metric")
     
     with col2:
-        st.metric("Folha Salarial Total", f"R$ {salario_total:,.2f}")
+        st.metric("Folha Salarial Total", f"R$ {salario_total:,.2f}", key="salario_total_metric")
     
     with col3:
-        st.metric("Salário Médio", f"R$ {salario_medio:,.2f}")
+        st.metric("Salário Médio", f"R$ {salario_medio:,.2f}", key="salario_medio_metric")
     
     with col4:
-        st.metric("Contratados Recentemente", len(recent_hires), delta=f"Últimos 30 dias")
+        st.metric("Contratados Recentemente", len(recent_hires), delta=f"Últimos 30 dias", key="recent_metric")
     
     with col5:
-        st.metric("Departamentos", departamentos)
+        st.metric("Departamentos", departamentos, key="dept_metric")
     
     st.markdown("---")
     
@@ -158,7 +172,7 @@ def show_dashboard():
     st.subheader("💰 Custo por Setor")
     
     # Calcular custo por departamento
-    dept_costs = df.groupby('departamento').agg({
+    dept_costs = df_temp.groupby('departamento').agg({
         'salario': ['sum', 'mean', 'count']
     }).round(2)
     dept_costs.columns = ['Custo Total', 'Salário Médio', 'Funcionários']
@@ -175,7 +189,7 @@ def show_dashboard():
     )
     fig_cost.update_xaxes(tickangle=45)
     fig_cost.update_layout(height=400)
-    st.plotly_chart(fig_cost, use_container_width=True)
+    st.plotly_chart(fig_cost, use_container_width=True, key="custo_setor_chart")
     
     # Cartões de custo organizados em grid
     st.write("**💰 Resumo Detalhado por Setor:**")
@@ -262,14 +276,15 @@ def show_dashboard():
                         "Salário",
                         format="R$ %.2f"
                     )
-                }
+                },
+                key="recent_employees_table"
             )
         
         with col2:
             # Estatísticas dos funcionários recentes
-            st.metric("Novos Funcionários", len(recent_hires))
-            st.metric("Custo Adicional", f"R$ {recent_hires['salario'].sum():,.2f}")
-            st.metric("Salário Médio (Novos)", f"R$ {recent_hires['salario'].mean():,.2f}")
+            st.metric("Novos Funcionários", len(recent_hires), key="new_employees_metric")
+            st.metric("Custo Adicional", f"R$ {recent_hires['salario'].sum():,.2f}", key="new_cost_metric")
+            st.metric("Salário Médio (Novos)", f"R$ {recent_hires['salario'].mean():,.2f}", key="new_avg_salary_metric")
     
     st.markdown("---")
     
@@ -278,7 +293,7 @@ def show_dashboard():
     
     with col1:
         # Distribuição por departamento (máximo 8 departamentos)
-        dept_count = df['departamento'].value_counts()
+        dept_count = df_temp['departamento'].value_counts()
         
         if len(dept_count) > 8:
             # Mostrar top 7 + "Outros"
@@ -294,12 +309,11 @@ def show_dashboard():
             title="📊 Funcionários por Departamento",
             color_discrete_sequence=px.colors.sequential.Reds_r
         )
-        st.plotly_chart(fig_pie, use_container_width=True)
+        st.plotly_chart(fig_pie, use_container_width=True, key="dept_pie_chart")
     
     with col2:
         # Contratações ao longo do tempo
-        if len(df) > 0:
-            df_temp = df.copy()
+        if len(df_temp) > 0:
             monthly_hires = df_temp.groupby(df_temp['data_admissao'].dt.to_period('M')).size().reset_index()
             monthly_hires['data_admissao'] = monthly_hires['data_admissao'].astype(str)
             
@@ -311,7 +325,7 @@ def show_dashboard():
                 labels={'data_admissao': 'Mês', 0: 'Contratações'},
                 color_discrete_sequence=['#FF0000']
             )
-            st.plotly_chart(fig_line, use_container_width=True)
+            st.plotly_chart(fig_line, use_container_width=True, key="hires_line_chart")
 
 # Função para gerenciar funcionários
 def show_employees():
@@ -324,7 +338,7 @@ def show_employees():
         st.subheader("Adicionar Novo Funcionário")
         
         # Botão para adicionar múltiplos funcionários
-        with st.expander("📋 Adicionar Múltiplos Funcionários (CSV)"):
+        with st.expander("📋 Adicionar Múltiplos Funcionários (CSV)", key="multi_add_expander"):
             st.write("**O sistema aceita automaticamente seus arquivos CSV do Excel**")
             
             col1, col2 = st.columns([2, 1])
@@ -346,15 +360,28 @@ MARIA SANTOS;GERENTE; R$ 8.500,50 ;VENDAS;01/02/2024""")
             
             with col2:
                 st.write("**Baixar Template:**")
-                with open('data/template_funcionarios.csv', 'r', encoding='utf-8') as template_file:
-                    template_content = template_file.read()
-                st.download_button(
-                    label="📥 Download Template CSV",
-                    data=template_content,
-                    file_name="template_funcionarios.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
+                try:
+                    with open('data/template_funcionarios.csv', 'r', encoding='utf-8') as template_file:
+                        template_content = template_file.read()
+                    st.download_button(
+                        label="📥 Download Template CSV",
+                        data=template_content,
+                        file_name="template_funcionarios.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                        key="template_download"
+                    )
+                except FileNotFoundError:
+                    st.warning("Template não encontrado. Criando template padrão...")
+                    template_content = "nome;cargo;salario;departamento;data_admissao\nExemplo;Analista;5000;Tecnologia;2024-01-01"
+                    st.download_button(
+                        label="📥 Download Template CSV",
+                        data=template_content,
+                        file_name="template_funcionarios.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                        key="template_download_fallback"
+                    )
                 
                 st.write("**Como usar:**")
                 st.markdown("""
@@ -369,7 +396,7 @@ MARIA SANTOS;GERENTE; R$ 8.500,50 ;VENDAS;01/02/2024""")
                 - Separador: ; ou ,
                 """)
             
-            uploaded_file = st.file_uploader("Selecionar arquivo CSV", type=['csv'])
+            uploaded_file = st.file_uploader("Selecionar arquivo CSV", type=['csv'], key="csv_uploader")
             if uploaded_file is not None:
                 # Prévia dos dados
                 try:
@@ -437,11 +464,11 @@ MARIA SANTOS;GERENTE; R$ 8.500,50 ;VENDAS;01/02/2024""")
                         st.success("✅ Todas as colunas obrigatórias encontradas!")
                         
                         st.write("**Prévia dos dados:**")
-                        st.dataframe(preview_df.head(), use_container_width=True)
+                        st.dataframe(preview_df.head(), use_container_width=True, key="preview_table")
                         
                         st.write(f"**Total de funcionários no arquivo:** {len(preview_df)}")
                         
-                        if st.button("📂 Importar Funcionários"):
+                        if st.button("📂 Importar Funcionários", key="import_button"):
                             success_count = 0
                             error_count = 0
                             errors_list = []
@@ -502,38 +529,39 @@ MARIA SANTOS;GERENTE; R$ 8.500,50 ;VENDAS;01/02/2024""")
                                 with st.expander("Ver detalhes dos erros"):
                                     for error in errors_list:
                                         st.write(f"- {error}")
-                            st.rerun()
+                            st.experimental_rerun()
                 except Exception as e:
                     st.error(f"❌ Erro ao ler arquivo CSV: {str(e)}")
                     st.write("**Possíveis problemas:**")
                     st.write("- Arquivo não está em formato CSV")
                     st.write("- Encoding do arquivo (tente salvar como UTF-8)")
                     st.write("- Separador incorreto (deve ser vírgula)")
-                    st.write("- Verifique se as colunas estão nomeadas corretamente")
+                    st.write("- Verifique si as colunas estão nomeadas corretamente")
         
         st.markdown("---")
         
-        with st.form("add_employee_form"):
+        with st.form("add_employee_form", clear_on_submit=True):
             col1, col2 = st.columns(2)
             
             with col1:
-                nome = st.text_input("Nome Completo*")
-                cargo = st.text_input("Cargo*")
-                salario = st.number_input("Salário (R$)*", min_value=0.0, step=100.0)
+                nome = st.text_input("Nome Completo*", key="nome_input")
+                cargo = st.text_input("Cargo*", key="cargo_input")
+                salario = st.number_input("Salário (R$)*", min_value=0.0, step=100.0, key="salario_input")
             
             with col2:
                 departamento = st.selectbox("Departamento*", 
-                    ["Recursos Humanos", "Tecnologia", "Vendas", "Marketing", "Financeiro", "Operações", "Outro"])
-                data_admissao = st.date_input("Data de Admissão*", value=date.today())
+                    ["Recursos Humanos", "Tecnologia", "Vendas", "Marketing", "Financeiro", "Operações", "Outro"],
+                    key="dept_select")
+                data_admissao = st.date_input("Data de Admissão*", value=date.today(), key="date_input")
                 
                 # Campos opcionais em expander
-                with st.expander("📋 Campos Opcionais"):
-                    email_opt = st.text_input("Email (será gerado automaticamente se vazio)")
-                    telefone_opt = st.text_input("Telefone")
-                    status_opt = st.selectbox("Status", ["Ativo", "Inativo", "Férias"])
-                    observacoes_opt = st.text_area("Observações")
+                with st.expander("📋 Campos Opcionais", key="optional_expander"):
+                    email_opt = st.text_input("Email (será gerado automaticamente se vazio)", key="email_input")
+                    telefone_opt = st.text_input("Telefone", key="phone_input")
+                    status_opt = st.selectbox("Status", ["Ativo", "Inativo", "Férias"], key="status_select")
+                    observacoes_opt = st.text_area("Observações", key="obs_input")
             
-            submitted = st.form_submit_button("➕ Adicionar Funcionário")
+            submitted = st.form_submit_button("➕ Adicionar Funcionário", key="add_employee_btn")
             
             if submitted:
                 if nome and departamento and cargo and salario > 0:
@@ -561,7 +589,7 @@ MARIA SANTOS;GERENTE; R$ 8.500,50 ;VENDAS;01/02/2024""")
                     
                     if success:
                         st.success("✅ Funcionário adicionado com sucesso!")
-                        st.rerun()
+                        st.experimental_rerun()
                     else:
                         st.error("❌ Erro ao adicionar funcionário. Email já existe.")
                 else:
@@ -571,7 +599,7 @@ MARIA SANTOS;GERENTE; R$ 8.500,50 ;VENDAS;01/02/2024""")
         st.subheader("Lista de Funcionários")
         
         # Carregar dados
-        df = data_handler.load_data()
+        df = load_cached_data()
         
         if df.empty:
             st.info("📭 Nenhum funcionário cadastrado.")
@@ -581,13 +609,13 @@ MARIA SANTOS;GERENTE; R$ 8.500,50 ;VENDAS;01/02/2024""")
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            dept_filter = st.selectbox("Filtrar por Departamento", ["Todos"] + list(df['departamento'].unique()))
+            dept_filter = st.selectbox("Filtrar por Departamento", ["Todos"] + list(df['departamento'].unique()), key="dept_filter")
         
         with col2:
-            status_filter = st.selectbox("Filtrar por Status", ["Todos"] + list(df['status'].unique()))
+            status_filter = st.selectbox("Filtrar por Status", ["Todos"] + list(df['status'].unique()), key="status_filter")
         
         with col3:
-            search_term = st.text_input("🔍 Buscar por nome")
+            search_term = st.text_input("🔍 Buscar por nome", key="search_input")
         
         # Aplicar filtros
         filtered_df = df.copy()
@@ -604,11 +632,11 @@ MARIA SANTOS;GERENTE; R$ 8.500,50 ;VENDAS;01/02/2024""")
         # Opções de visualização
         col1, col2, col3 = st.columns([2, 1, 1])
         with col1:
-            view_mode = st.radio("Modo de visualização:", ["📋 Tabela", "📊 Cartões"], horizontal=True)
+            view_mode = st.radio("Modo de visualização:", ["📋 Tabela", "📊 Cartões"], horizontal=True, key="view_mode_radio")
         with col2:
-            sort_by = st.selectbox("Ordenar por:", ["nome", "salario", "data_admissao", "departamento"])
+            sort_by = st.selectbox("Ordenar por:", ["nome", "salario", "data_admissao", "departamento"], key="sort_select")
         with col3:
-            sort_order = st.selectbox("Ordem:", ["Crescente", "Decrescente"])
+            sort_order = st.selectbox("Ordem:", ["Crescente", "Decrescente"], key="order_select")
         
         # Aplicar ordenação
         ascending = True if sort_order == "Crescente" else False
@@ -619,15 +647,16 @@ MARIA SANTOS;GERENTE; R$ 8.500,50 ;VENDAS;01/02/2024""")
             # Exibir tabela com edição rápida
             st.dataframe(
                 filtered_df[['nome', 'email', 'departamento', 'cargo', 'salario', 'status', 'data_admissao']],
-                use_container_width=True
+                use_container_width=True,
+                key="employees_table"
             )
             
             # Edição rápida de status
-            with st.expander("⚡ Edição Rápida de Status"):
-                selected_employees = st.multiselect("Selecionar funcionários:", filtered_df['nome'].tolist())
-                new_status = st.selectbox("Novo status:", ["Ativo", "Inativo", "Férias"])
+            with st.expander("⚡ Edição Rápida de Status", key="quick_edit_expander"):
+                selected_employees = st.multiselect("Selecionar funcionários:", filtered_df['nome'].tolist(), key="employee_select")
+                new_status = st.selectbox("Novo status:", ["Ativo", "Inativo", "Férias"], key="new_status_select")
                 
-                if st.button("💾 Atualizar Status Selecionados") and selected_employees:
+                if st.button("💾 Atualizar Status Selecionados", key="update_status_btn") and selected_employees:
                     updated_count = 0
                     for emp_name in selected_employees:
                         emp_data_row = filtered_df[filtered_df['nome'] == emp_name].iloc[0]
@@ -640,7 +669,7 @@ MARIA SANTOS;GERENTE; R$ 8.500,50 ;VENDAS;01/02/2024""")
                     
                     if updated_count > 0:
                         st.success(f"✅ {updated_count} funcionários atualizados!")
-                        st.rerun()
+                        st.experimental_rerun()
         else:
             # Visualização em cartões
             for idx, row in filtered_df.iterrows():
@@ -669,7 +698,7 @@ MARIA SANTOS;GERENTE; R$ 8.500,50 ;VENDAS;01/02/2024""")
     with tab3:
         st.subheader("Editar ou Excluir Funcionário")
         
-        df = data_handler.load_data()
+        df = load_cached_data()
         
         if df.empty:
             st.info("📭 Nenhum funcionário cadastrado.")
@@ -677,7 +706,7 @@ MARIA SANTOS;GERENTE; R$ 8.500,50 ;VENDAS;01/02/2024""")
         
         # Selecionar funcionário
         employee_names = df['nome'].tolist()
-        selected_employee = st.selectbox("Selecione um funcionário:", employee_names)
+        selected_employee = st.selectbox("Selecione um funcionário:", employee_names, key="employee_edit_select")
         
         if selected_employee:
             employee_data = df[df['nome'] == selected_employee].iloc[0]
@@ -687,27 +716,29 @@ MARIA SANTOS;GERENTE; R$ 8.500,50 ;VENDAS;01/02/2024""")
             with col1:
                 st.subheader("Editar Funcionário")
                 
-                with st.form("edit_employee_form"):
+                with st.form("edit_employee_form", key="edit_form"):
                     col_a, col_b = st.columns(2)
                     
                     with col_a:
-                        nome = st.text_input("Nome Completo", value=employee_data['nome'])
-                        email = st.text_input("Email", value=employee_data['email'])
-                        telefone = st.text_input("Telefone", value=employee_data.get('telefone', ''))
+                        nome = st.text_input("Nome Completo", value=employee_data['nome'], key="edit_nome")
+                        email = st.text_input("Email", value=employee_data['email'], key="edit_email")
+                        telefone = st.text_input("Telefone", value=employee_data.get('telefone', ''), key="edit_telefone")
                         departamento = st.selectbox("Departamento", 
                             ["Recursos Humanos", "Tecnologia", "Vendas", "Marketing", "Financeiro", "Operações", "Outro"],
-                            index=["Recursos Humanos", "Tecnologia", "Vendas", "Marketing", "Financeiro", "Operações", "Outro"].index(employee_data['departamento']) if employee_data['departamento'] in ["Recursos Humanos", "Tecnologia", "Vendas", "Marketing", "Financeiro", "Operações", "Outro"] else 0)
+                            index=["Recursos Humanos", "Tecnologia", "Vendas", "Marketing", "Financeiro", "Operações", "Outro"].index(employee_data['departamento']) if employee_data['departamento'] in ["Recursos Humanos", "Tecnologia", "Vendas", "Marketing", "Financeiro", "Operações", "Outro"] else 0,
+                            key="edit_departamento")
                     
                     with col_b:
-                        cargo = st.text_input("Cargo", value=employee_data['cargo'])
-                        salario = st.number_input("Salário (R$)", value=float(employee_data['salario']), min_value=0.0, step=100.0)
-                        data_admissao = st.date_input("Data de Admissão", value=pd.to_datetime(employee_data['data_admissao']).date())
+                        cargo = st.text_input("Cargo", value=employee_data['cargo'], key="edit_cargo")
+                        salario = st.number_input("Salário (R$)", value=float(employee_data['salario']), min_value=0.0, step=100.0, key="edit_salario")
+                        data_admissao = st.date_input("Data de Admissão", value=pd.to_datetime(employee_data['data_admissao']).date(), key="edit_data_admissao")
                         status = st.selectbox("Status", ["Ativo", "Inativo", "Férias"],
-                            index=["Ativo", "Inativo", "Férias"].index(employee_data['status']) if employee_data['status'] in ["Ativo", "Inativo", "Férias"] else 0)
+                            index=["Ativo", "Inativo", "Férias"].index(employee_data['status']) if employee_data['status'] in ["Ativo", "Inativo", "Férias"] else 0,
+                            key="edit_status")
                     
-                    observacoes = st.text_area("Observações", value=employee_data.get('observacoes', ''))
+                    observacoes = st.text_area("Observações", value=employee_data.get('observacoes', ''), key="edit_observacoes")
                     
-                    submitted = st.form_submit_button("💾 Salvar Alterações")
+                    submitted = st.form_submit_button("💾 Salvar Alterações", key="save_edit_btn")
                     
                     if submitted:
                         updated_data = {
@@ -724,7 +755,7 @@ MARIA SANTOS;GERENTE; R$ 8.500,50 ;VENDAS;01/02/2024""")
                         
                         if data_handler.update_employee(employee_data['email'], updated_data):
                             st.success("✅ Funcionário atualizado com sucesso!")
-                            st.rerun()
+                            st.experimental_rerun()
                         else:
                             st.error("❌ Erro ao atualizar funcionário.")
             
@@ -732,10 +763,10 @@ MARIA SANTOS;GERENTE; R$ 8.500,50 ;VENDAS;01/02/2024""")
                 st.subheader("Excluir")
                 st.warning("⚠️ Esta ação não pode ser desfeita!")
                 
-                if st.button("🗑️ Excluir Funcionário", type="secondary"):
+                if st.button("🗑️ Excluir Funcionário", type="secondary", key="delete_btn"):
                     if data_handler.delete_employee(employee_data['email']):
                         st.success("✅ Funcionário excluído com sucesso!")
-                        st.rerun()
+                        st.experimental_rerun()
                     else:
                         st.error("❌ Erro ao excluir funcionário.")
 
@@ -743,23 +774,27 @@ MARIA SANTOS;GERENTE; R$ 8.500,50 ;VENDAS;01/02/2024""")
 def show_reports():
     st.header("📊 Relatórios e Análises")
     
-    df = data_handler.load_data()
+    df = load_cached_data()
     
     if df.empty:
         st.warning("⚠️ Nenhum dado disponível para gerar relatórios.")
         return
     
+    # Criar cópia para manipulação - CORREÇÃO AQUI
+    df_temp = df.copy()
+    df_temp['data_admissao'] = pd.to_datetime(df_temp['data_admissao'])
+    
     # Filtros de período
     col1, col2 = st.columns(2)
     with col1:
-        start_date = st.date_input("Data Inicial", value=pd.to_datetime(df['data_admissao']).min().date())
+        start_date = st.date_input("Data Inicial", value=df_temp['data_admissao'].min().date(), key="start_date")
     with col2:
-        end_date = st.date_input("Data Final", value=date.today())
+        end_date = st.date_input("Data Final", value=date.today(), key="end_date")
     
     # Filtrar dados por período
-    df_filtered = df[
-        (pd.to_datetime(df['data_admissao']).dt.date >= start_date) &
-        (pd.to_datetime(df['data_admissao']).dt.date <= end_date)
+    df_filtered = df_temp[
+        (df_temp['data_admissao'].dt.date >= start_date) &
+        (df_temp['data_admissao'].dt.date <= end_date)
     ]
     
     # Tabs para diferentes tipos de relatórios
@@ -778,7 +813,7 @@ def show_reports():
                 nbins=20,
                 title="Distribuição de Salários"
             )
-            st.plotly_chart(fig_hist, use_container_width=True)
+            st.plotly_chart(fig_hist, use_container_width=True, key="salary_hist_chart")
         
         with col2:
             # Top 10 maiores salários
@@ -790,21 +825,19 @@ def show_reports():
                 title="Top 10 Maiores Salários"
             )
             fig_top.update_xaxes(tickangle=45)
-            st.plotly_chart(fig_top, use_container_width=True)
+            st.plotly_chart(fig_top, use_container_width=True, key="top_salaries_chart")
         
         # Estatísticas salariais por departamento
         salary_stats = df_filtered.groupby('departamento')['salario'].agg(['mean', 'median', 'min', 'max']).round(2)
         salary_stats.columns = ['Média', 'Mediana', 'Mínimo', 'Máximo']
         st.subheader("Estatísticas Salariais por Departamento")
-        st.dataframe(salary_stats, use_container_width=True)
+        st.dataframe(salary_stats, use_container_width=True, key="salary_stats_table")
     
     with tab2:
         st.subheader("Crescimento da Empresa")
         
         # Contratações ao longo do tempo
-        df_filtered_copy = df_filtered.copy()
-        df_filtered_copy['data_admissao'] = pd.to_datetime(df_filtered_copy['data_admissao'])
-        monthly_hires = df_filtered_copy.groupby(df_filtered_copy['data_admissao'].dt.to_period('M')).size().reset_index()
+        monthly_hires = df_filtered.groupby(df_filtered['data_admissao'].dt.to_period('M')).size().reset_index()
         monthly_hires['data_admissao'] = monthly_hires['data_admissao'].astype(str)
         
         fig_growth = px.line(
@@ -814,10 +847,10 @@ def show_reports():
             title="Contratações por Mês"
         )
         fig_growth.update_layout(yaxis_title="Número de Contratações")
-        st.plotly_chart(fig_growth, use_container_width=True)
+        st.plotly_chart(fig_growth, use_container_width=True, key="growth_chart")
         
         # Crescimento cumulativo
-        cumulative_hires = df_filtered_copy.sort_values('data_admissao')
+        cumulative_hires = df_filtered.sort_values('data_admissao')
         cumulative_hires['funcionarios_acumulados'] = range(1, len(cumulative_hires) + 1)
         
         fig_cumulative = px.line(
@@ -826,7 +859,7 @@ def show_reports():
             y='funcionarios_acumulados',
             title="Crescimento Cumulativo de Funcionários"
         )
-        st.plotly_chart(fig_cumulative, use_container_width=True)
+        st.plotly_chart(fig_cumulative, use_container_width=True, key="cumulative_chart")
     
     with tab3:
         st.subheader("🏢 Análise Completa por Departamentos")
@@ -856,7 +889,8 @@ def show_reports():
                 "Menor Salário": st.column_config.NumberColumn("Menor Salário", format="R$ %.2f"),
                 "Maior Salário": st.column_config.NumberColumn("Maior Salário", format="R$ %.2f"),
                 "% do Custo Total": st.column_config.NumberColumn("% do Custo Total", format="%.1f%%")
-            }
+            },
+            key="dept_analysis_table"
         )
         
         # Gráficos aprimorados
@@ -895,7 +929,7 @@ def show_reports():
             )
             fig_scatter.update_traces(textposition="top center")
             fig_scatter.update_layout(height=400)
-            st.plotly_chart(fig_scatter, use_container_width=True)
+            st.plotly_chart(fig_scatter, use_container_width=True, key="scatter_chart")
         
         with col2:
             # Participação no custo total (pizza)
@@ -910,7 +944,7 @@ def show_reports():
                 color_discrete_sequence=px.colors.sequential.Reds_r
             )
             fig_pie_cost.update_layout(height=400)
-            st.plotly_chart(fig_pie_cost, use_container_width=True)
+            st.plotly_chart(fig_pie_cost, use_container_width=True, key="pie_chart")
         
         # Análise de eficiência salarial
         st.subheader("⚡ Análise de Eficiência")
@@ -934,7 +968,7 @@ def show_reports():
         )
         fig_efficiency.update_xaxes(tickangle=45)
         fig_efficiency.update_traces(texttemplate='R$ %{text:,.0f}', textposition='outside')
-        st.plotly_chart(fig_efficiency, use_container_width=True)
+        st.plotly_chart(fig_efficiency, use_container_width=True, key="efficiency_chart")
     
     with tab4:
         st.subheader("Exportar Dados")
@@ -943,19 +977,20 @@ def show_reports():
         
         with col1:
             st.write("**Exportar Lista Completa de Funcionários**")
-            if st.button("📊 Baixar Excel - Funcionários"):
+            if st.button("📊 Baixar Excel - Funcionários", key="export_employees_btn"):
                 excel_data = data_handler.export_to_excel(df_filtered)
                 if excel_data:
                     st.download_button(
                         label="⬇️ Download Excel",
                         data=excel_data,
                         file_name=f"funcionarios_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="download_excel_btn"
                     )
         
         with col2:
             st.write("**Exportar Relatório de Salários**")
-            if st.button("📈 Baixar Relatório de Salários"):
+            if st.button("📈 Baixar Relatório de Salários", key="export_salary_btn"):
                 salary_report = df_filtered.groupby('departamento').agg({
                     'nome': 'count',
                     'salario': ['mean', 'sum', 'min', 'max']
@@ -967,7 +1002,8 @@ def show_reports():
                         label="⬇️ Download Relatório",
                         data=excel_data,
                         file_name=f"relatorio_salarios_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="download_report_btn"
                     )
 
 # Função para configurações
@@ -980,14 +1016,15 @@ def show_settings():
     
     with col1:
         st.write("**Backup dos Dados**")
-        if st.button("💾 Criar Backup"):
+        if st.button("💾 Criar Backup", key="backup_btn"):
             backup_data = data_handler.create_backup()
             if backup_data:
                 st.download_button(
                     label="⬇️ Download Backup",
                     data=backup_data,
                     file_name=f"backup_funcionarios_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv"
+                    mime="text/csv",
+                    key="download_backup_btn"
                 )
                 st.success("✅ Backup criado com sucesso!")
             else:
@@ -995,12 +1032,12 @@ def show_settings():
     
     with col2:
         st.write("**Restaurar Dados**")
-        uploaded_file = st.file_uploader("Carregar arquivo de backup", type=['csv'])
+        uploaded_file = st.file_uploader("Carregar arquivo de backup", type=['csv'], key="restore_uploader")
         if uploaded_file is not None:
-            if st.button("🔄 Restaurar Dados"):
+            if st.button("🔄 Restaurar Dados", key="restore_btn"):
                 if data_handler.restore_backup(uploaded_file):
                     st.success("✅ Dados restaurados com sucesso!")
-                    st.rerun()
+                    st.experimental_rerun()
                 else:
                     st.error("❌ Erro ao restaurar dados. Verifique o formato do arquivo.")
     
@@ -1008,23 +1045,23 @@ def show_settings():
     
     st.subheader("📊 Informações do Sistema")
     
-    df = data_handler.load_data()
+    df = load_cached_data()
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.metric("Total de Registros", len(df))
+        st.metric("Total de Registros", len(df), key="total_records_metric")
     
     with col2:
         if not df.empty:
             last_update = pd.to_datetime(df['data_admissao']).max()
-            st.metric("Última Atualização", last_update.strftime('%d/%m/%Y'))
+            st.metric("Última Atualização", last_update.strftime('%d/%m/%Y'), key="last_update_metric")
         else:
-            st.metric("Última Atualização", "Nunca")
+            st.metric("Última Atualização", "Nunca", key="never_update_metric")
     
     with col3:
         file_size = os.path.getsize(data_handler.data_file) if os.path.exists(data_handler.data_file) else 0
-        st.metric("Tamanho do Arquivo", f"{file_size / 1024:.1f} KB")
+        st.metric("Tamanho do Arquivo", f"{file_size / 1024:.1f} KB", key="file_size_metric")
 
 # Roteamento principal
 if page == "🏠 Dashboard":
