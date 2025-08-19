@@ -1,0 +1,13 @@
+nome,email,telefone,departamento,cargo,salario,data_admissao,status,observacoes
+Maria Silva,maria.silva@empresa.com,(11) 98765-4321,Recursos Humanos,Gerente de RH,8500.00,2023-01-15,Ativo,Responsável por recrutamento e seleção
+João Santos,joao.santos@empresa.com,(11) 99876-5432,Tecnologia,Desenvolvedor Senior,12000.00,2023-02-01,Ativo,Especialista em Python e React
+Ana Costa,ana.costa@empresa.com,(11) 97654-3210,Marketing,Analista de Marketing,5200.00,2023-03-10,Ativo,Foco em marketing digital e redes sociais
+Carlos Oliveira,carlos.oliveira@empresa.com,(11) 96543-2109,Vendas,Consultor de Vendas,4800.00,2023-04-05,Ativo,Vendas B2B para grandes empresas
+Fernanda Lima,fernanda.lima@empresa.com,(11) 95432-1098,Financeiro,Analista Financeiro,6200.00,2023-05-20,Ativo,Análise de custos e orçamentos
+Roberto Pereira,roberto.pereira@empresa.com,(11) 94321-0987,Tecnologia,DevOps Engineer,10500.00,2023-06-15,Ativo,Infraestrutura e automação
+Juliana Melo,juliana.melo@empresa.com,(11) 93210-9876,Recursos Humanos,Analista de RH,4500.00,2023-07-01,Ativo,Folha de pagamento e benefícios
+Pedro Rodrigues,pedro.rodrigues@empresa.com,(11) 92109-8765,Marketing,Coordenador de Marketing,7800.00,2023-08-10,Ativo,Estratégias de marca e campanhas
+Carla Ferreira,carla.ferreira@empresa.com,(11) 91098-7654,Operações,Supervisora de Operações,6800.00,2023-09-05,Ativo,Logística e processos operacionais
+Lucas Almeida,lucas.almeida@empresa.com,(11) 90987-6543,Tecnologia,Analista de Sistemas,7500.00,2023-10-15,Ativo,Desenvolvimento de sistemas internos
+Beatriz Souza,beatriz.souza@empresa.com,(11) 89876-5432,Vendas,Gerente de Vendas,9200.00,2023-11-01,Ativo,Gestão de equipe e metas de vendas
+Ricardo Martins,ricardo.martins@empresa.com,(11) 88765-4321,Financeiro,Controller,11500.00,2023-12-10,Ativo,Controle financeiro e contabilidade
