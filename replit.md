@@ -7,13 +7,19 @@ This is a Streamlit-based employee management system that provides a comprehensi
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
+Data import preference: Simplified CSV format with only essential fields (nome, cargo, salario, departamento, data_admissao).
+Automatic email generation from employee names preferred for easier data entry.
 
 ## System Architecture
 
 ### Frontend Architecture
 - **Framework**: Streamlit web application framework
-- **Layout**: Multi-page application with sidebar navigation
+- **Layout**: Multi-page application with dynamic sidebar showing real-time metrics
 - **UI Components**: Wide layout with expandable sidebar, organized in columns for metrics display
+- **Real-time Updates**: Sidebar displays current employee count, payroll total, and last update time
+- **Dynamic Data Import**: CSV upload with preview and template download functionality
+- **Flexible Views**: Table and card view modes with sorting and filtering options
+- **Bulk Operations**: Quick status updates for multiple employees simultaneously
 - **Navigation**: Page-based routing system with four main sections: Dashboard, Employees, Reports, and Settings
 
 ### Data Storage
@@ -34,8 +40,13 @@ Preferred communication style: Simple, everyday language.
 
 ### Data Management
 - **CRUD Operations**: Full create, read, update, and delete functionality for employee records
+- **Simplified CSV Import**: Accepts CSV files with only essential fields (nome, cargo, salario, departamento, data_admissao)
+- **Automatic Email Generation**: Creates emails automatically from employee names for easier data entry
+- **Bulk Import**: Import multiple employees via CSV upload with preview functionality
+- **Quick Status Updates**: Bulk status changes for multiple employees
 - **Data Validation**: Built-in validation through pandas DataFrame structure
 - **File Management**: Automatic creation of data directory and CSV file initialization
+- **Template Download**: Provides CSV template for consistent data formatting
 - **Data Persistence**: Direct CSV file operations for reliable data storage
 
 ## External Dependencies

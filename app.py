@@ -124,17 +124,58 @@ def show_employees():
         
         # Botão para adicionar múltiplos funcionários
         with st.expander("📋 Adicionar Múltiplos Funcionários (CSV)"):
-            st.write("Faça upload de um arquivo CSV com as colunas: nome, email, telefone, departamento, cargo, salario, data_admissao, status, observacoes")
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                st.write("**Formato do CSV:** nome, cargo, salario, departamento, data_admissao")
+                st.write("**Exemplo:**")
+                st.code("""nome,cargo,salario,departamento,data_admissao
+João Silva,Analista,5000,Tecnologia,2024-01-15
+Maria Santos,Gerente,8000,Vendas,2024-02-01""")
+            
+            with col2:
+                st.write("**Baixar Template:**")
+                with open('data/template_funcionarios.csv', 'r') as template_file:
+                    template_content = template_file.read()
+                st.download_button(
+                    label="📥 Download Template CSV",
+                    data=template_content,
+                    file_name="template_funcionarios.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+            
             uploaded_file = st.file_uploader("Selecionar arquivo CSV", type=['csv'])
             if uploaded_file is not None:
-                if st.button("📂 Importar Funcionários"):
-                    try:
-                        import_df = pd.read_csv(uploaded_file)
+                # Prévia dos dados
+                try:
+                    preview_df = pd.read_csv(uploaded_file)
+                    st.write("**Prévia dos dados:**")
+                    st.dataframe(preview_df.head(), use_container_width=True)
+                    
+                    if st.button("📂 Importar Funcionários"):
                         success_count = 0
                         error_count = 0
                         
-                        for _, row in import_df.iterrows():
-                            employee_data = row.to_dict()
+                        for _, row in preview_df.iterrows():
+                            # Criar email automático baseado no nome
+                            nome_parts = str(row['nome']).lower().split()
+                            if len(nome_parts) >= 2:
+                                email = f"{nome_parts[0]}.{nome_parts[-1]}@empresa.com"
+                            else:
+                                email = f"{nome_parts[0]}@empresa.com"
+                            
+                            employee_data = {
+                                'nome': row['nome'],
+                                'email': email,
+                                'telefone': '',
+                                'departamento': row['departamento'],
+                                'cargo': row['cargo'],
+                                'salario': row['salario'],
+                                'data_admissao': row['data_admissao'],
+                                'status': 'Ativo',
+                                'observacoes': ''
+                            }
+                            
                             if data_handler.add_employee(employee_data):
                                 success_count += 1
                             else:
@@ -145,8 +186,9 @@ def show_employees():
                         if error_count > 0:
                             st.warning(f"⚠️ {error_count} funcionários não foram importados (email já existe)")
                         st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ Erro ao importar arquivo: {e}")
+                except Exception as e:
+                    st.error(f"❌ Erro ao ler arquivo: {e}")
+                    st.write("Verifique se o arquivo tem as colunas corretas: nome, cargo, salario, departamento, data_admissao")
         
         st.markdown("---")
         
@@ -155,33 +197,45 @@ def show_employees():
             
             with col1:
                 nome = st.text_input("Nome Completo*")
-                email = st.text_input("Email*")
-                telefone = st.text_input("Telefone")
-                departamento = st.selectbox("Departamento*", 
-                    ["Recursos Humanos", "Tecnologia", "Vendas", "Marketing", "Financeiro", "Operações", "Outro"])
-            
-            with col2:
                 cargo = st.text_input("Cargo*")
                 salario = st.number_input("Salário (R$)*", min_value=0.0, step=100.0)
-                data_admissao = st.date_input("Data de Admissão*", value=date.today())
-                status = st.selectbox("Status", ["Ativo", "Inativo", "Férias"])
             
-            observacoes = st.text_area("Observações")
+            with col2:
+                departamento = st.selectbox("Departamento*", 
+                    ["Recursos Humanos", "Tecnologia", "Vendas", "Marketing", "Financeiro", "Operações", "Outro"])
+                data_admissao = st.date_input("Data de Admissão*", value=date.today())
+                
+                # Campos opcionais em expander
+                with st.expander("📋 Campos Opcionais"):
+                    email_opt = st.text_input("Email (será gerado automaticamente se vazio)")
+                    telefone_opt = st.text_input("Telefone")
+                    status_opt = st.selectbox("Status", ["Ativo", "Inativo", "Férias"])
+                    observacoes_opt = st.text_area("Observações")
             
             submitted = st.form_submit_button("➕ Adicionar Funcionário")
             
             if submitted:
-                if nome and email and departamento and cargo and salario > 0:
+                if nome and departamento and cargo and salario > 0:
+                    # Gerar email automaticamente se não fornecido
+                    if not email_opt:
+                        nome_parts = nome.lower().split()
+                        if len(nome_parts) >= 2:
+                            email_final = f"{nome_parts[0]}.{nome_parts[-1]}@empresa.com"
+                        else:
+                            email_final = f"{nome_parts[0]}@empresa.com"
+                    else:
+                        email_final = email_opt
+                    
                     success = data_handler.add_employee({
                         'nome': nome,
-                        'email': email,
-                        'telefone': telefone,
+                        'email': email_final,
+                        'telefone': telefone_opt,
                         'departamento': departamento,
                         'cargo': cargo,
                         'salario': salario,
                         'data_admissao': data_admissao,
-                        'status': status,
-                        'observacoes': observacoes
+                        'status': status_opt,
+                        'observacoes': observacoes_opt
                     })
                     
                     if success:
@@ -190,7 +244,7 @@ def show_employees():
                     else:
                         st.error("❌ Erro ao adicionar funcionário. Email já existe.")
                 else:
-                    st.error("⚠️ Por favor, preencha todos os campos obrigatórios.")
+                    st.error("⚠️ Por favor, preencha os campos obrigatórios: Nome, Departamento, Cargo e Salário.")
     
     with tab2:
         st.subheader("Lista de Funcionários")
