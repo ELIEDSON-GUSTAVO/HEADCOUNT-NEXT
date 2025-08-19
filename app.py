@@ -124,17 +124,43 @@ def show_employees():
         
         # Botão para adicionar múltiplos funcionários
         with st.expander("📋 Adicionar Múltiplos Funcionários (CSV)"):
+            st.write("**Formato do CSV:** Cada informação deve estar em uma coluna separada")
+            
             col1, col2 = st.columns([2, 1])
             with col1:
-                st.write("**Formato do CSV:** nome, cargo, salario, departamento, data_admissao")
-                st.write("**Exemplo:**")
-                st.code("""nome,cargo,salario,departamento,data_admissao
-João Silva,Analista,5000,Tecnologia,2024-01-15
-Maria Santos,Gerente,8000,Vendas,2024-02-01""")
+                st.write("**Colunas obrigatórias:**")
+                st.markdown("""
+                - **nome** - Nome completo do funcionário
+                - **cargo** - Cargo/função
+                - **salario** - Valor do salário (apenas números)
+                - **departamento** - Setor da empresa
+                - **data_admissao** - Data no formato AAAA-MM-DD
+                """)
+                
+                st.write("**Estrutura do arquivo CSV:**")
+                
+                # Criar um DataFrame de exemplo para mostrar a estrutura
+                example_data = {
+                    'nome': ['João Silva', 'Maria Santos', 'Pedro Costa'],
+                    'cargo': ['Analista', 'Gerente', 'Assistente'],
+                    'salario': [5000, 8000, 3500],
+                    'departamento': ['Tecnologia', 'Vendas', 'Financeiro'],
+                    'data_admissao': ['2024-01-15', '2024-02-01', '2024-03-10']
+                }
+                example_df = pd.DataFrame(example_data)
+                st.dataframe(example_df, use_container_width=True)
+                
+                st.write("**Como criar o arquivo:**")
+                st.markdown("""
+                1. Abra Excel ou Google Sheets
+                2. Coloque cada informação em uma coluna (como na tabela acima)
+                3. Salve como arquivo CSV
+                4. Faça upload aqui
+                """)
             
             with col2:
                 st.write("**Baixar Template:**")
-                with open('data/template_funcionarios.csv', 'r') as template_file:
+                with open('data/template_funcionarios.csv', 'r', encoding='utf-8') as template_file:
                     template_content = template_file.read()
                 st.download_button(
                     label="📥 Download Template CSV",
@@ -143,52 +169,81 @@ Maria Santos,Gerente,8000,Vendas,2024-02-01""")
                     mime="text/csv",
                     use_container_width=True
                 )
+                
+                st.write("**Dica:** Abra o template no Excel ou Google Sheets para facilitar a edição")
             
             uploaded_file = st.file_uploader("Selecionar arquivo CSV", type=['csv'])
             if uploaded_file is not None:
                 # Prévia dos dados
                 try:
                     preview_df = pd.read_csv(uploaded_file)
-                    st.write("**Prévia dos dados:**")
-                    st.dataframe(preview_df.head(), use_container_width=True)
                     
-                    if st.button("📂 Importar Funcionários"):
-                        success_count = 0
-                        error_count = 0
+                    # Verificar se todas as colunas obrigatórias estão presentes
+                    required_columns = ['nome', 'cargo', 'salario', 'departamento', 'data_admissao']
+                    missing_columns = [col for col in required_columns if col not in preview_df.columns]
+                    
+                    if missing_columns:
+                        st.error(f"❌ Colunas obrigatórias faltando: {', '.join(missing_columns)}")
+                        st.write("**Colunas encontradas no arquivo:**", list(preview_df.columns))
+                        st.write("**Colunas obrigatórias:**", required_columns)
+                    else:
+                        st.success("✅ Todas as colunas obrigatórias encontradas!")
                         
-                        for _, row in preview_df.iterrows():
-                            # Criar email automático baseado no nome
-                            nome_parts = str(row['nome']).lower().split()
-                            if len(nome_parts) >= 2:
-                                email = f"{nome_parts[0]}.{nome_parts[-1]}@empresa.com"
-                            else:
-                                email = f"{nome_parts[0]}@empresa.com"
-                            
-                            employee_data = {
-                                'nome': row['nome'],
-                                'email': email,
-                                'telefone': '',
-                                'departamento': row['departamento'],
-                                'cargo': row['cargo'],
-                                'salario': row['salario'],
-                                'data_admissao': row['data_admissao'],
-                                'status': 'Ativo',
-                                'observacoes': ''
-                            }
-                            
-                            if data_handler.add_employee(employee_data):
-                                success_count += 1
-                            else:
-                                error_count += 1
+                        st.write("**Prévia dos dados:**")
+                        st.dataframe(preview_df.head(), use_container_width=True)
                         
-                        if success_count > 0:
-                            st.success(f"✅ {success_count} funcionários importados com sucesso!")
-                        if error_count > 0:
-                            st.warning(f"⚠️ {error_count} funcionários não foram importados (email já existe)")
-                        st.rerun()
+                        st.write(f"**Total de funcionários no arquivo:** {len(preview_df)}")
+                        
+                        if st.button("📂 Importar Funcionários"):
+                            success_count = 0
+                            error_count = 0
+                            errors_list = []
+                            
+                            for index, row in preview_df.iterrows():
+                                try:
+                                    # Criar email automático baseado no nome
+                                    nome_parts = str(row['nome']).lower().split()
+                                    if len(nome_parts) >= 2:
+                                        email = f"{nome_parts[0]}.{nome_parts[-1]}@empresa.com"
+                                    else:
+                                        email = f"{nome_parts[0]}@empresa.com"
+                                    
+                                    employee_data = {
+                                        'nome': str(row['nome']),
+                                        'email': email,
+                                        'telefone': '',
+                                        'departamento': str(row['departamento']),
+                                        'cargo': str(row['cargo']),
+                                        'salario': float(row['salario']),
+                                        'data_admissao': str(row['data_admissao']),
+                                        'status': 'Ativo',
+                                        'observacoes': ''
+                                    }
+                                    
+                                    if data_handler.add_employee(employee_data):
+                                        success_count += 1
+                                    else:
+                                        error_count += 1
+                                        errors_list.append(f"Linha {index + 2}: {row['nome']} (email já existe)")
+                                except Exception as e:
+                                    error_count += 1
+                                    errors_list.append(f"Linha {index + 2}: {row['nome']} - {str(e)}")
+                            
+                            if success_count > 0:
+                                st.success(f"✅ {success_count} funcionários importados com sucesso!")
+                            if error_count > 0:
+                                st.warning(f"⚠️ {error_count} funcionários não foram importados")
+                                with st.expander("Ver detalhes dos erros"):
+                                    for error in errors_list:
+                                        st.write(f"- {error}")
+                            st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Erro ao ler arquivo: {e}")
-                    st.write("Verifique se o arquivo tem as colunas corretas: nome, cargo, salario, departamento, data_admissao")
+                    st.error(f"❌ Erro ao ler arquivo CSV: {str(e)}")
+                    st.write("**Possíveis problemas:**")
+                    st.write("- Arquivo não está em formato CSV")
+                    st.write("- Encoding do arquivo (tente salvar como UTF-8)")
+                    st.write("- Separador incorreto (deve ser vírgula)")
+                    st.write("- Verifique se as colunas estão nomeadas corretamente")
         
         st.markdown("---")
         
