@@ -126,12 +126,16 @@ def show_dashboard():
         return
     
     # Métricas principais
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     total_funcionarios = len(df)
     salario_total = float(df['salario'].sum())
     salario_medio = float(df['salario'].mean())
     departamentos = int(df['departamento'].nunique())
+    
+    # Funcionários recentes (últimos 30 dias)
+    df['data_admissao'] = pd.to_datetime(df['data_admissao'])
+    recent_hires = df[df['data_admissao'] >= (datetime.now() - pd.Timedelta(days=30))]
     
     with col1:
         st.metric("Total de Funcionários", total_funcionarios)
@@ -143,40 +147,127 @@ def show_dashboard():
         st.metric("Salário Médio", f"R$ {salario_medio:,.2f}")
     
     with col4:
+        st.metric("Contratados Recentemente", len(recent_hires), delta=f"Últimos 30 dias")
+    
+    with col5:
         st.metric("Departamentos", departamentos)
     
     st.markdown("---")
     
-    # Gráficos
+    # Custo por Setor - Destaque Principal
+    st.subheader("💰 Custo por Setor")
+    
+    # Calcular custo por departamento
+    dept_costs = df.groupby('departamento').agg({
+        'salario': ['sum', 'mean', 'count']
+    }).round(2)
+    dept_costs.columns = ['Custo Total', 'Salário Médio', 'Funcionários']
+    dept_costs = dept_costs.sort_values('Custo Total', ascending=False)
+    
+    # Criar tabela de custos com visual moderno
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        # Gráfico de barras para custo total por setor
+        fig_cost = px.bar(
+            x=dept_costs.index,
+            y=dept_costs['Custo Total'],
+            title="💸 Custo Total por Setor",
+            labels={'x': 'Departamento', 'y': 'Custo Total (R$)'},
+            color=dept_costs['Custo Total'],
+            color_continuous_scale=['#FF6B6B', '#FF0000', '#8B0000']
+        )
+        fig_cost.update_xaxes(tickangle=45)
+        st.plotly_chart(fig_cost, use_container_width=True)
+    
+    with col2:
+        # Tabela resumo de custos
+        st.write("**Resumo de Custos por Setor:**")
+        for dept in dept_costs.index:
+            custo = dept_costs.loc[dept, 'Custo Total']
+            funcionarios = int(dept_costs.loc[dept, 'Funcionários'])
+            percentual = (custo / salario_total) * 100
+            
+            st.markdown(f"""
+            <div style="border: 1px solid #FF0000; padding: 10px; margin: 5px 0; border-radius: 5px;">
+                <strong>{dept}</strong><br>
+                💰 R$ {custo:,.2f} ({percentual:.1f}%)<br>
+                👥 {funcionarios} funcionários
+            </div>
+            """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Funcionários Recentes - Seção destacada
+    if len(recent_hires) > 0:
+        st.subheader("🆕 Funcionários Adicionados Recentemente")
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            # Lista dos funcionários recentes
+            recent_display = recent_hires[['nome', 'cargo', 'departamento', 'salario', 'data_admissao']].copy()
+            recent_display['data_admissao'] = recent_display['data_admissao'].dt.strftime('%d/%m/%Y')
+            recent_display = recent_display.sort_values('data_admissao', ascending=False)
+            
+            st.dataframe(
+                recent_display,
+                use_container_width=True,
+                column_config={
+                    "salario": st.column_config.NumberColumn(
+                        "Salário",
+                        format="R$ %.2f"
+                    )
+                }
+            )
+        
+        with col2:
+            # Estatísticas dos funcionários recentes
+            st.metric("Novos Funcionários", len(recent_hires))
+            st.metric("Custo Adicional", f"R$ {recent_hires['salario'].sum():,.2f}")
+            st.metric("Salário Médio (Novos)", f"R$ {recent_hires['salario'].mean():,.2f}")
+    
+    st.markdown("---")
+    
+    # Gráficos adicionais otimizados
     col1, col2 = st.columns(2)
     
     with col1:
-        # Funcionários por departamento
+        # Distribuição por departamento (máximo 8 departamentos)
         dept_count = df['departamento'].value_counts()
-        fig_dept = px.pie(
+        
+        if len(dept_count) > 8:
+            # Mostrar top 7 + "Outros"
+            top_depts = dept_count.head(7)
+            others_count = dept_count.tail(-7).sum()
+            if others_count > 0:
+                top_depts['Outros'] = others_count
+            dept_count = top_depts
+        
+        fig_pie = px.pie(
             values=dept_count.values,
             names=dept_count.index,
-            title="Funcionários por Departamento"
+            title="📊 Funcionários por Departamento",
+            color_discrete_sequence=px.colors.sequential.Reds_r
         )
-        fig_dept.update_layout(height=400)
-        st.plotly_chart(fig_dept, use_container_width=True)
+        st.plotly_chart(fig_pie, use_container_width=True)
     
     with col2:
-        # Distribuição salarial por departamento
-        fig_salary = px.box(
-            df,
-            x='departamento',
-            y='salario',
-            title="Distribuição Salarial por Departamento"
-        )
-        fig_salary.update_layout(height=400)
-        fig_salary.update_xaxes(tickangle=45)
-        st.plotly_chart(fig_salary, use_container_width=True)
-    
-    # Tabela de funcionários recentes
-    st.subheader("📅 Funcionários Adicionados Recentemente")
-    recent_employees = df.sort_values('data_admissao', ascending=False).head(5)
-    st.dataframe(recent_employees[['nome', 'departamento', 'cargo', 'salario', 'data_admissao']], use_container_width=True)
+        # Contratações ao longo do tempo
+        if len(df) > 0:
+            df_temp = df.copy()
+            monthly_hires = df_temp.groupby(df_temp['data_admissao'].dt.to_period('M')).size().reset_index()
+            monthly_hires['data_admissao'] = monthly_hires['data_admissao'].astype(str)
+            
+            fig_line = px.line(
+                monthly_hires,
+                x='data_admissao',
+                y=0,
+                title="📈 Contratações por Mês",
+                labels={'data_admissao': 'Mês', 0: 'Contratações'},
+                color_discrete_sequence=['#FF0000']
+            )
+            st.plotly_chart(fig_line, use_container_width=True)
 
 # Função para gerenciar funcionários
 def show_employees():
@@ -694,40 +785,101 @@ def show_reports():
         st.plotly_chart(fig_cumulative, use_container_width=True)
     
     with tab3:
-        st.subheader("Análise por Departamentos")
+        st.subheader("🏢 Análise Completa por Departamentos")
         
+        # Análise detalhada com múltiplas métricas
+        dept_analysis = df_filtered.groupby('departamento').agg({
+            'salario': ['sum', 'mean', 'median', 'count', 'min', 'max'],
+            'nome': 'count'
+        }).round(2)
+        dept_analysis.columns = ['Custo Total', 'Média Salarial', 'Mediana', 'Funcionários', 'Menor Salário', 'Maior Salário', 'Total']
+        dept_analysis = dept_analysis.drop('Total', axis=1)  # Remove coluna duplicada
+        dept_analysis = dept_analysis.sort_values('Custo Total', ascending=False)
+        
+        # Calcular percentuais
+        total_custo = dept_analysis['Custo Total'].sum()
+        dept_analysis['% do Custo Total'] = (dept_analysis['Custo Total'] / total_custo * 100).round(1)
+        
+        # Mostrar tabela com formatação de moeda
+        st.subheader("📊 Resumo Financeiro por Departamento")
+        st.dataframe(
+            dept_analysis,
+            use_container_width=True,
+            column_config={
+                "Custo Total": st.column_config.NumberColumn("Custo Total", format="R$ %.2f"),
+                "Média Salarial": st.column_config.NumberColumn("Média Salarial", format="R$ %.2f"),
+                "Mediana": st.column_config.NumberColumn("Mediana", format="R$ %.2f"),
+                "Menor Salário": st.column_config.NumberColumn("Menor Salário", format="R$ %.2f"),
+                "Maior Salário": st.column_config.NumberColumn("Maior Salário", format="R$ %.2f"),
+                "% do Custo Total": st.column_config.NumberColumn("% do Custo Total", format="%.1f%%")
+            }
+        )
+        
+        # Gráficos aprimorados
         col1, col2 = st.columns(2)
         
         with col1:
-            # Funcionários por departamento
-            dept_count = df_filtered['departamento'].value_counts()
-            fig_dept = px.bar(
-                x=dept_count.index,
-                y=dept_count.values,
-                title="Funcionários por Departamento"
+            # Gráfico de custo vs funcionários (otimizado para muitos departamentos)
+            dept_display = dept_analysis.head(10)  # Top 10 departamentos
+            
+            if len(dept_analysis) > 10:
+                others_cost = dept_analysis.tail(-10)['Custo Total'].sum()
+                others_func = dept_analysis.tail(-10)['Funcionários'].sum()
+                
+                # Adicionar "Outros" se necessário
+                new_row = pd.DataFrame({
+                    'Custo Total': [others_cost],
+                    'Funcionários': [others_func],
+                    'Média Salarial': [others_cost/others_func if others_func > 0 else 0]
+                }, index=['Outros'])
+                dept_display = pd.concat([dept_display, new_row])
+            
+            fig_scatter = px.scatter(
+                dept_display.reset_index(),
+                x='Funcionários',
+                y='Custo Total',
+                title="💰 Custo Total vs Número de Funcionários",
+                text='departamento',
+                size='Custo Total',
+                color='Média Salarial',
+                color_continuous_scale='Reds',
+                hover_data=['Média Salarial']
             )
-            fig_dept.update_xaxes(tickangle=45)
-            st.plotly_chart(fig_dept, use_container_width=True)
+            fig_scatter.update_traces(textposition="top center")
+            fig_scatter.update_layout(height=400)
+            st.plotly_chart(fig_scatter, use_container_width=True)
         
         with col2:
-            # Custo por departamento
-            dept_cost = df_filtered.groupby('departamento')['salario'].sum().sort_values(ascending=False)
-            fig_cost = px.bar(
-                x=dept_cost.index,
-                y=dept_cost.values,
-                title="Custo Total por Departamento"
+            # Participação no custo total (pizza)
+            fig_pie_cost = px.pie(
+                dept_display.reset_index(),
+                values='Custo Total',
+                names='departamento',
+                title="📊 Participação no Custo Total",
+                color_discrete_sequence=px.colors.sequential.Reds_r
             )
-            fig_cost.update_xaxes(tickangle=45)
-            st.plotly_chart(fig_cost, use_container_width=True)
+            fig_pie_cost.update_layout(height=400)
+            st.plotly_chart(fig_pie_cost, use_container_width=True)
         
-        # Tabela resumo por departamento
-        dept_summary = df_filtered.groupby('departamento').agg({
-            'nome': 'count',
-            'salario': ['mean', 'sum']
-        }).round(2)
-        dept_summary.columns = ['Total Funcionários', 'Salário Médio', 'Custo Total']
-        st.subheader("Resumo por Departamento")
-        st.dataframe(dept_summary, use_container_width=True)
+        # Análise de eficiência salarial
+        st.subheader("⚡ Análise de Eficiência")
+        
+        # Calcular eficiência (custo médio por funcionário)
+        dept_analysis['Custo por Funcionário'] = dept_analysis['Custo Total'] / dept_analysis['Funcionários']
+        dept_efficiency = dept_analysis.sort_values('Custo por Funcionário', ascending=False).head(10)
+        
+        fig_efficiency = px.bar(
+            dept_efficiency.reset_index(),
+            x='departamento',
+            y='Custo por Funcionário',
+            title="💸 Custo Médio por Funcionário (Top 10)",
+            color='Custo por Funcionário',
+            color_continuous_scale='Reds',
+            text='Custo por Funcionário'
+        )
+        fig_efficiency.update_xaxes(tickangle=45)
+        fig_efficiency.update_traces(texttemplate='R$ %{text:,.0f}', textposition='outside')
+        st.plotly_chart(fig_efficiency, use_container_width=True)
     
     with tab4:
         st.subheader("Exportar Dados")
