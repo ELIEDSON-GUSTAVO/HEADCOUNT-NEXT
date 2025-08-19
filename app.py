@@ -5,6 +5,33 @@ import plotly.graph_objects as go
 from datetime import datetime, date
 import os
 
+# SOLUÇÃO PARA O ERRO removeChild
+import streamlit as st
+from streamlit import _bottom
+
+# Configuração especial para evitar o erro
+st.set_page_config(
+    page_title="Sistema de Gestão de Funcionários",
+    page_icon="👥",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Cache otimizado para evitar recriação de componentes
+@st.cache_resource(show_spinner=False)
+def get_data_handler():
+    return DataHandler()
+
+# Sua classe DataHandler (se necessário como fallback)
+class DataHandler:
+    def __init__(self):
+        self.data_file = "data/funcionarios.csv"
+    
+    def load_data(self):
+        try:
+            return pd.read_csv(self.data_file, sep=";")
+        except:
+            return pd.DataFrame()
 # Importações locais (com fallback)
 try:
     from utils.data_handler import DataHandler
